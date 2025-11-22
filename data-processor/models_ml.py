@@ -1,19 +1,30 @@
-# main p
-"""
-This model trains ED waiting times and outputs the 
-"""
-
 import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
 
-
-df = pd.read_csv(r"C:\Users\sorin.creanga\Desktop\Medcare\base-data\ER Wait Time Dataset.csv", index_col=0)
-
-def train_wait_time_pred(df):
-    """ This model trains and precits waiting times in ER room for incoming pacients.
-    """
-
+def train_wait_time_model(df):
+    # 1. Basic Preprocessing
+    le = LabelEncoder()
+    # Convert text categories to numbers so the model can understand
+    df['triage_code'] = le.fit_transform(df['triage']) 
     
+    # 2. Define Features (X) and Target (Y)
+    X = df[['triage_code']] # In real life, add more columns like time of day
+    y = df['wait_time_minutes']
+    
+    # 3. Train Model
+    model = RandomForestRegressor(n_estimators=10)
+    model.fit(X, y)
+    
+    print("✅ Model trained successfully")
+    return model
 
+def get_triage_recommendation(patient_data):
+    # Simple rule-based logic for the demo
+    complaint = patient_data.get('complaint', '').lower()
+    if 'chest' in complaint or 'breathing' in complaint:
+        return 'CRITICAL'
+    elif 'blood' in complaint or 'broken' in complaint:
+        return 'URGENT'
+    else:
+        return 'STANDARD'
