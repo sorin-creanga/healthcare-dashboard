@@ -14,10 +14,12 @@ def push_data():
     print(f"Generated {len(df)} patients. Sending to API...")
 
     for index, row in df.iterrows():
+        
         # Map the dataframe columns to the Java API parameters
         params = {
             'chiefComplaint': row['complaint'],
-            'triageLevel': row['triage']
+            'triageLevel': row['triage'],
+            'waitTime': int(row['wait_time_minutes'])  # <--- ADD THIS LINE
         }
         
         try:
