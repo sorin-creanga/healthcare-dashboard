@@ -1,3 +1,4 @@
+package backend;
 import com.sun.net.httpserver.*;
 import java.io.*;
 import java.net.InetSocketAddress;
@@ -27,7 +28,7 @@ public class QuickHealthcareAPI {
             
             // HTML Header with 30-Second Meta Refresh
             html.append("<html><head>")
-                .append("<meta http-equiv='refresh' content='30'>") // <--- FIXED: Now 30 seconds
+                .append("<meta http-equiv='refresh' content='30'>") 
                 .append("<title>ED Dashboard</title>")
                 .append("<style>")
                 .append("body { font-family: sans-serif; padding: 20px; background: #f0f2f5; }")
@@ -66,12 +67,15 @@ public class QuickHealthcareAPI {
 
             for (Map<String, Object> p : reversedList) {
                 String triageClass = (String) p.get("triage");
+                Object waitVal = p.get("waitTime");
+                String waitDisplay = (waitVal != null) ? waitVal.toString() : "0";
+                
                 html.append("<tr>");
                 html.append("<td>").append(p.get("anonymousId")).append("</td>");
                 html.append("<td class='").append(triageClass).append("'>").append(p.get("triage")).append("</td>");
                 html.append("<td>").append(p.get("complaint")).append("</td>");
                 html.append("<td>").append(p.get("status")).append("</td>");
-                html.append("<td>").append(p.get("waitTime")).append(" min</td>");
+                html.append("<td>").append(waitDisplay).append(" min</td>");
                 html.append("</tr>");
             }
 
@@ -86,7 +90,7 @@ public class QuickHealthcareAPI {
             os.close();
         });
         
-        // 2. METRICS API (For checking data raw)
+        // 2. METRICS API
         server.createContext("/api/metrics", exchange -> {
             int waiting = 0;
             for (Map<String, Object> p : patients) {
@@ -96,31 +100,43 @@ public class QuickHealthcareAPI {
             sendJsonResponse(exchange, json);
         });
         
-        // 3. PATIENTS API (Handles GET list AND Python POST data)
+        // 3. PATIENTS API
         server.createContext("/api/patients", exchange -> {
             
-            // >>> THIS IS THE NEW PART YOU MISSED <<<
             // Handle POST requests (Incoming data from Python)
             if ("POST".equals(exchange.getRequestMethod())) {
                 try {
-                    // Parse the Query Parameters sent by Python
                     String query = exchange.getRequestURI().getQuery();
                     Map<String, String> params = parseQuery(query);
 
-                    // Create new patient object
+                    // Extract raw values first
+                    String triage = params.getOrDefault("triageLevel", "STANDARD");
+                    String waitStr = params.getOrDefault("waitTime", "0");
+                    int waitTime = 0;
+                    try {
+                         waitTime = Integer.parseInt(waitStr);
+                    } catch (NumberFormatException e) {
+                         waitTime = 0;
+                    }
+
+                    // >>> BUSINESS LOGIC: URGENT RULE <<<
+                    // If Patient is URGENT, wait time cannot exceed 10 minutes.
+                    if ("URGENT".equalsIgnoreCase(triage) && waitTime > 10) {
+                        System.out.println("⚠️ ALERT: Urgent patient wait time capped! Was: " + waitTime + ", Set to: 10");
+                        waitTime = 10; 
+                    }
+                    // >>> END LOGIC <<<
+
                     Map<String, Object> newPatient = new HashMap<>();
                     newPatient.put("id", patientIdCounter++);
                     newPatient.put("anonymousId", "PT-NEW-" + (1000 + new Random().nextInt(9000)));
-                    
-                    // Map Python keys (chiefComplaint) to Java keys (complaint)
                     newPatient.put("complaint", params.getOrDefault("chiefComplaint", "Unknown"));
-                    newPatient.put("triage", params.getOrDefault("triageLevel", "STANDARD"));
+                    newPatient.put("triage", triage);
                     newPatient.put("status", "WAITING");
-                    newPatient.put("waitTime", 0); // Just arrived
+                    newPatient.put("waitTime", waitTime);
 
-                    // Add to database
                     patients.add(newPatient);
-                    System.out.println("✅ Received new patient from Python: " + newPatient.get("complaint"));
+                    System.out.println("✅ Received: " + newPatient.get("complaint") + " | Wait: " + newPatient.get("waitTime"));
 
                     sendJsonResponse(exchange, "{\"message\": \"Patient Added\"}");
                 } catch (Exception e) {
@@ -131,7 +147,7 @@ public class QuickHealthcareAPI {
                 return;
             }
             
-            // Handle GET requests (View list JSON)
+            // Handle GET requests
             StringBuilder json = new StringBuilder("[");
             for (int i = 0; i < patients.size(); i++) {
                 if (i > 0) json.append(",");
@@ -151,7 +167,6 @@ public class QuickHealthcareAPI {
         System.out.println("Server started on http://localhost:8080");
     }
     
-    // Helper to send JSON
     static void sendJsonResponse(HttpExchange exchange, String json) throws IOException {
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(200, json.getBytes().length);
@@ -160,7 +175,6 @@ public class QuickHealthcareAPI {
         os.close();
     }
 
-    // Helper to parse URL parameters from Python
     static Map<String, String> parseQuery(String query) {
         Map<String, String> result = new HashMap<>();
         if (query == null) return result;
@@ -176,7 +190,6 @@ public class QuickHealthcareAPI {
     }
 
     static void addSamplePatients() {
-        // Initial dummy data
         Map<String, Object> p = new HashMap<>();
         p.put("id", patientIdCounter++);
         p.put("anonymousId", "PT-INIT-001");
