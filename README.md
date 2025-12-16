@@ -8,20 +8,7 @@ This project simulates a Hospital Emergency Department dashboard. It uses a micr
 
 Safe Testing: Provides a risk-free environment to test critical algorithms, such as wait-time caps for urgent patients, before deploying them to real hospitals.
 
-**File Structure**
 
-/Healthcare-Project
-│
-├── /backend
-│   └── QuickHealthcareAPI.java      # Core server handling HTTP requests and rendering the dashboard.
-│
-├── /data-processor
-│   ├── push_to_api.py               # Fetches synthetic data and POSTs it to the Java server.
-│   ├── syntetic_data_generator.py   # Creates realistic random patient data.
-│   ├── models_ml.py                 # Logic for predicting wait times.
-│   └── requirements.txt             # Python dependencies.
-│
-└── README.md                        # Documentation.
 
 
 **How to Run**
